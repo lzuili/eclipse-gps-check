@@ -261,16 +261,39 @@
       return;
     }
     btn.disabled = true;
-    setLog('Getting your location…');
+    setLog('Getting your location… (can take up to 2 min with no network — hold still, ideally outdoors)');
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => sendData(phase, pos, btn),
-      (err) => {
-        setLog('Could not get location: ' + err.message + '. Check location permission and try again.', true);
-        btn.disabled = false;
+    let settled = false;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(giveUpTimer);
+        navigator.geolocation.clearWatch(watchId);
+        sendData(phase, pos, btn);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      (err) => {
+        // PERMISSION_DENIED (1) is fatal — stop immediately.
+        // POSITION_UNAVAILABLE (2) / TIMEOUT (3) just mean "still trying" without network assistance — keep waiting.
+        if (err.code === 1) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(giveUpTimer);
+          navigator.geolocation.clearWatch(watchId);
+          setLog('Location permission denied. Please allow location for this page and try again.', true);
+          btn.disabled = false;
+        }
+      },
+      { enableHighAccuracy: true, timeout: 118000, maximumAge: 0 }
     );
+
+    const giveUpTimer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      navigator.geolocation.clearWatch(watchId);
+      setLog('Still no GPS fix after 2 min. Try going outdoors with a clear sky view, then tap again.', true);
+      btn.disabled = false;
+    }, 120000);
   }
 
   function sendData(phase, pos, btn) {
