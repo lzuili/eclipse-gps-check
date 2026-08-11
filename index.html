@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Eclipse GPS Check</title>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --panel: #141a2b;
+    --accent: #f2a541;
+    --accent2: #6ea8fe;
+    --text: #eef1f8;
+    --muted: #8f97ab;
+    --ok: #3ecf8e;
+    --err: #ef5b5b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at 50% 0%, #1b2338, var(--bg) 60%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px 48px;
+  }
+  .card {
+    width: 100%;
+    max-width: 420px;
+  }
+  h1 {
+    font-size: 1.3rem;
+    margin: 0 0 6px;
+    text-align: center;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.88rem;
+    text-align: center;
+    margin: 0 0 22px;
+    line-height: 1.4;
+  }
+  .buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  button.phase {
+    padding: 18px 16px;
+    border-radius: 14px;
+    border: 1px solid #2a3350;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 1.05rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: transform 0.1s ease, border-color 0.2s ease;
+  }
+  button.phase:active { transform: scale(0.97); }
+  button.phase .sub { font-size: 0.75rem; color: var(--muted); font-weight: 400; display: block; margin-top: 2px; }
+  button.phase.done { border-color: var(--ok); }
+  button.phase .status { font-size: 1.3rem; }
+  button.phase:disabled { opacity: 0.55; }
+
+  #before { border-color: #3a4568; }
+  #during { border-color: var(--accent); }
+  #after  { border-color: #3a4568; }
+
+  .name-field {
+    margin-bottom: 18px;
+  }
+  .name-field label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .name-field input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #2a3350;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 1rem;
+  }
+
+  .mode-field {
+    margin-bottom: 8px;
+  }
+  .mode-field label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .mode-toggle {
+    display: flex;
+    gap: 10px;
+  }
+  .mode-btn {
+    flex: 1;
+    padding: 14px 10px;
+    border-radius: 12px;
+    border: 1px solid #2a3350;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-align: center;
+  }
+  .mode-btn.selected {
+    border-color: var(--accent2);
+    background: #1c2540;
+  }
+  .mode-hint {
+    font-size: 0.76rem;
+    color: var(--accent);
+    text-align: center;
+    margin: 8px 0 20px;
+  }
+  .buttons.locked {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .log {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    min-height: 1.2em;
+    margin-top: 4px;
+  }
+  .footer {
+    margin-top: 28px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🌒 Eclipse GPS Check</h1>
+  <p class="subtitle">Tap the button that matches right now. That's it — no typing needed. Do it up to 3 times today: before, during, and just after the eclipse.</p>
+
+  <div class="name-field">
+    <label for="name">Your first name (optional, helps me match entries)</label>
+    <input id="name" type="text" placeholder="e.g. Marta" autocomplete="off">
+  </div>
+
+  <div class="mode-field">
+    <label>Are you in airplane mode?</label>
+    <div class="mode-toggle">
+      <button type="button" class="mode-btn" id="mode-on" onclick="setMode('airplane')">✈️ Airplane mode ON</button>
+      <button type="button" class="mode-btn" id="mode-off" onclick="setMode('normal')">📶 Normal (data/wifi)</button>
+    </div>
+  </div>
+  <p class="mode-hint">Open this page BEFORE turning on airplane mode. We especially need airplane-mode data — GPS still works without a signal, and if you have no connection when you tap, your reading is saved on your phone and sent automatically once you're back online.</p>
+
+  <div class="buttons locked" id="buttons">
+    <button class="phase" id="before" onclick="logPhase('before', this)">
+      <span>Before the eclipse<span class="sub">Normal daylight, sun still visible</span></span>
+      <span class="status">☀️</span>
+    </button>
+    <button class="phase" id="during" onclick="logPhase('during', this)">
+      <span>During totality / max darkness<span class="sub">Right now it's dark or near-dark</span></span>
+      <span class="status">🌑</span>
+    </button>
+    <button class="phase" id="after" onclick="logPhase('after', this)">
+      <span>After the eclipse<span class="sub">Back to normal daylight</span></span>
+      <span class="status">🌞</span>
+    </button>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <div class="footer">
+    This just reads your phone's built-in location accuracy — no app install, nothing to sign up for. Data goes straight to Léa for a quick eclipse experiment. Thanks for helping! 🙏
+  </div>
+</div>
+
+<script>
+  // TODO: paste your Apps Script Web App URL here after deploying (see setup instructions)
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyZ85cpfV4foKwPvkiBg5gA1_0GnMdVnZouHGvun22VlJr__7Mq9mPickeWZuH7JCC1ng/exec';
+  const QUEUE_KEY = 'eclipse_gps_queue_v1';
+
+  let currentMode = null; // 'airplane' | 'normal'
+
+  // ---- offline queue (for when the phone has no connection, e.g. airplane mode) ----
+  function getQueue() {
+    try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function saveQueue(q) {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+  }
+  function enqueue(payload) {
+    const q = getQueue();
+    q.push(payload);
+    saveQueue(q);
+  }
+  function sendOne(payload) {
+    return fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+  }
+  function flushQueue() {
+    const q = getQueue();
+    if (!q.length) return;
+    const remaining = [];
+    let sent = 0;
+    const attempts = q.map((payload) =>
+      sendOne(payload).then(() => { sent++; }).catch(() => { remaining.push(payload); })
+    );
+    Promise.all(attempts).then(() => {
+      saveQueue(remaining);
+      if (sent > 0) {
+        setLog((sent === 1 ? '1 saved reading' : sent + ' saved readings') + ' sent now that you\'re back online.' +
+          (remaining.length ? ' (' + remaining.length + ' still pending)' : ''));
+      }
+    });
+  }
+  window.addEventListener('online', flushQueue);
+  window.addEventListener('load', () => {
+    const pending = getQueue().length;
+    if (pending) {
+      setLog(pending + (pending === 1 ? ' reading is' : ' readings are') + ' saved and waiting to send — will retry automatically.');
+    }
+    flushQueue();
+  });
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('mode-on').classList.toggle('selected', mode === 'airplane');
+    document.getElementById('mode-off').classList.toggle('selected', mode === 'normal');
+    document.getElementById('buttons').classList.remove('locked');
+  }
+
+  function setLog(msg, isError) {
+    const el = document.getElementById('log');
+    el.textContent = msg;
+    el.style.color = isError ? '#ef5b5b' : '#8f97ab';
+  }
+
+  function logPhase(phase, btn) {
+    if (!currentMode) {
+      setLog('Please choose airplane mode or normal first.', true);
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLog('This browser has no location support.', true);
+      return;
+    }
+    btn.disabled = true;
+    setLog('Getting your location…');
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => sendData(phase, pos, btn),
+      (err) => {
+        setLog('Could not get location: ' + err.message + '. Check location permission and try again.', true);
+        btn.disabled = false;
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  }
+
+  function sendData(phase, pos, btn) {
+    const c = pos.coords;
+    const payload = {
+      phase: phase,
+      mode: currentMode,
+      name: document.getElementById('name').value || '',
+      timestamp: new Date().toISOString(),
+      lat: c.latitude,
+      lon: c.longitude,
+      accuracy: c.accuracy,
+      altitude: c.altitude,
+      altitudeAccuracy: c.altitudeAccuracy,
+      speed: c.speed,
+      userAgent: navigator.userAgent
+    };
+
+    if (SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
+      setLog('Setup incomplete: SCRIPT_URL not set yet.', true);
+      btn.disabled = false;
+      return;
+    }
+
+    sendOne(payload).then(() => {
+      btn.classList.add('done');
+      btn.querySelector('.status').textContent = '✅';
+      setLog('Logged — accuracy ' + Math.round(c.accuracy) + ' m. Thank you!');
+      btn.disabled = false; // allow re-logging if needed
+    }).catch(() => {
+      // No connection right now (e.g. airplane mode) — save it and retry automatically later.
+      enqueue(payload);
+      btn.classList.add('done');
+      btn.querySelector('.status').textContent = '💾';
+      setLog('No connection — reading saved on your phone (accuracy ' + Math.round(c.accuracy) + ' m). It will send automatically once you\'re back online.');
+      btn.disabled = false;
+    });
+  }
+</script>
+</body>
+</html>
